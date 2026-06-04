@@ -6,7 +6,7 @@ from datetime import datetime
 import google.generativeai as genai
 
 genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-1.5-flash")
+model = genai.GenerativeModel("gemini-2.0-flash")
 
 RSS_FEEDS = {
     "정치": [
@@ -14,8 +14,8 @@ RSS_FEEDS = {
         "https://www.yna.co.kr/rss/economy.xml",            # 연합뉴스 (보조)
     ],
     "경제": [
-        "https://www.hankyung.com/feed/economy",             # 한국경제 경제 ✅
-        "https://www.hankyung.com/feed/finance",             # 한국경제 금융 ✅
+       "https://www.yna.co.kr/rss/economy.xml",             # 연합뉴스 경제 ✅
+       "https://biz.chosun.com/site/data/rss/rss.xml",      # 조선비즈 ✅
     ],
     "사회": [
         "https://www.yna.co.kr/rss/society.xml",             # 연합뉴스 사회 ✅
