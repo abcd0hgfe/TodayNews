@@ -2,9 +2,9 @@ name: 뉴스 대시보드 자동 업데이트
 
 on:
   schedule:
-    - cron: '0 23 * * *'   # 한국시간 오전 8시 (UTC 23:00 전날)
-    - cron: '0 8 * * *'    # 한국시간 오후 5시 (UTC 08:00)
-  workflow_dispatch:         # 수동 실행도 가능
+    - cron: '0 23 * * *'   # 한국시간 오전 8시
+    - cron: '0 8 * * *'    # 한국시간 오후 5시
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,7 +12,7 @@ permissions:
 jobs:
   update-news:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: 코드 체크아웃
         uses: actions/checkout@v4
@@ -23,11 +23,11 @@ jobs:
           python-version: '3.11'
 
       - name: 패키지 설치
-        run: pip install feedparser openai
+        run: pip install feedparser google-generativeai
 
       - name: 뉴스 수집 및 HTML 생성
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python fetch_news.py
 
       - name: 변경사항 커밋 & 푸시
