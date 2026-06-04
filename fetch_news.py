@@ -4,31 +4,30 @@ import os
 import re
 import time
 from datetime import datetime
-import google.generativeai as genai
+from google import genai
 
-genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-model = genai.GenerativeModel("gemini-2.5-flash-lite")
+client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
 
 RSS_FEEDS = {
     "정치": [
-        "https://www.yna.co.kr/rss/politics.xml",           # 연합뉴스 정치 ✅
-        "https://www.yna.co.kr/rss/economy.xml",            # 연합뉴스 (보조)
+        "https://www.yna.co.kr/rss/politics.xml",
+        "https://www.yna.co.kr/rss/economy.xml",
     ],
     "경제": [
-       "https://www.yna.co.kr/rss/economy.xml",             # 연합뉴스 경제 ✅
-       "https://biz.chosun.com/site/data/rss/rss.xml",      # 조선비즈 ✅
+        "https://www.yna.co.kr/rss/economy.xml",
+        "https://biz.chosun.com/site/data/rss/rss.xml",
     ],
     "사회": [
-        "https://www.yna.co.kr/rss/society.xml",             # 연합뉴스 사회 ✅
-        "https://www.yna.co.kr/rss/culture.xml",             # 연합뉴스 문화
+        "https://www.yna.co.kr/rss/society.xml",
+        "https://www.yna.co.kr/rss/culture.xml",
     ],
     "IT·기술": [
-        "https://feeds.feedburner.com/zdkorea",              # 지디넷코리아 ✅ (새 URL)
-        "https://www.etnews.com/etnews/rss.xml",             # 전자신문 ✅
+        "https://feeds.feedburner.com/zdkorea",
+        "https://www.etnews.com/etnews/rss.xml",
     ],
     "세계": [
-        "https://www.yna.co.kr/rss/international.xml",       # 연합뉴스 국제 ✅
-        "https://www.yna.co.kr/rss/all.xml",                 # 연합뉴스 전체 (보조)
+        "https://www.yna.co.kr/rss/international.xml",
+        "https://www.yna.co.kr/rss/all.xml",
     ],
 }
 
@@ -36,9 +35,11 @@ def analyze_article(title, description):
     prompt = f"""다음 뉴스 기사를 분석해줘.
 
 제목: {title}
+
 내용: {description}
 
 아래 JSON 형식으로만 응답해. 다른 말 하지 말고 JSON만:
+
 {{
   "summary": "기사 내용을 2~3문장으로 간략히 요약",
   "positive": "이 기사로 인한 긍정적 효과 1~2문장",
@@ -47,13 +48,17 @@ def analyze_article(title, description):
 }}"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-2.5-flash-lite",
+            contents=prompt,
+        )
         text = response.text.strip()
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             return json.loads(match.group())
     except Exception as e:
         print(f"  분석 오류: {e}")
+
     return None
 
 def fetch_section(section_name, urls, max_articles=5):
@@ -67,7 +72,6 @@ def fetch_section(section_name, urls, max_articles=5):
         except Exception as e:
             print(f"    [{section_name}] RSS 오류 ({url}): {e}")
 
-    # 중복 제거 (제목 기준)
     seen = set()
     unique = []
     for entry in articles_raw:
@@ -81,12 +85,10 @@ def fetch_section(section_name, urls, max_articles=5):
 
 def fetch_and_analyze():
     all_news = {}
-
     for section, urls in RSS_FEEDS.items():
         print(f"\n========== [{section}] 시작 ==========")
         entries = fetch_section(section, urls)
         articles = []
-
         for entry in entries:
             title = entry.get("title", "").strip()
             description = entry.get("summary", entry.get("description", "")).strip()
@@ -98,8 +100,8 @@ def fetch_and_analyze():
                 continue
 
             print(f"  분석 중: {title[:40]}...")
-              analysis = analyze_article(title, description)
-             time.sleep(7)  # 분당 10개 제한 대응
+            analysis = analyze_article(title, description)
+            time.sleep(7)
 
             if analysis:
                 articles.append({
@@ -148,7 +150,6 @@ def generate_html(news_data):
                 imp_class = "high" if article["importance"] == "high" else "mid"
                 imp_label = "★ 주요" if article["importance"] == "high" else "▲ 관심"
                 pub = article["published"][:16] if article["published"] else ""
-
                 cards_html += f'''
                 <div class="card">
                   <div class="card-header">
