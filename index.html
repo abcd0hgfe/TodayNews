@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>뉴스 대시보드</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh}
+    header{background:linear-gradient(135deg,#1a1d2e,#16213e);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+    .logo{display:flex;align-items:center;gap:10px}
+    .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,#0ea5e9,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}
+    .logo h1{font-size:1.3rem;font-weight:700;color:#fff}
+    .logo span{font-size:0.75rem;color:#8b949e;display:block;margin-top:2px}
+    .updated{font-size:0.78rem;color:#8b949e;background:#21262d;padding:6px 14px;border-radius:20px;border:1px solid #30363d}
+    .tabs{display:flex;gap:8px;padding:20px 32px 0;border-bottom:1px solid #21262d;overflow-x:auto}
+    .tab-btn{padding:10px 20px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:0.9rem;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;white-space:nowrap}
+    .tab-btn:hover{color:#e1e4e8}
+    .tab-btn.active{color:#fff;border-bottom-color:#0ea5e9;font-weight:700}
+    .dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+    .section-content{display:none}
+    .section-content.active{display:block}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:28px 32px;max-width:1400px;margin:0 auto}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px;transition:transform 0.2s,border-color 0.2s;display:flex;flex-direction:column;gap:14px}
+    .card:hover{transform:translateY(-3px);border-color:#58a6ff}
+    .card-header{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+    .importance{font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}
+    .importance.high{background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3)}
+    .importance.mid{background:rgba(234,179,8,0.15);color:#fbbf24;border:1px solid rgba(234,179,8,0.3)}
+    .card-title{font-size:1rem;font-weight:700;line-height:1.5;color:#e6edf3}
+    .card-summary{font-size:0.875rem;line-height:1.7;color:#c9d1d9;border-left:3px solid #30363d;padding-left:12px}
+    .effects{display:flex;flex-direction:column;gap:8px}
+    .effect{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:8px;font-size:0.82rem;line-height:1.6}
+    .effect.positive{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#86efac}
+    .effect.negative{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#fca5a5}
+    .effect-icon{font-size:1rem;flex-shrink:0;margin-top:1px}
+    .effect-label{font-weight:700;margin-right:4px}
+    .card-footer{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #21262d}
+    .card-time{font-size:0.75rem;color:#8b949e}
+    .card-link{font-size:0.78rem;color:#58a6ff;text-decoration:none;font-weight:500}
+    .card-link:hover{text-decoration:underline}
+    @media(max-width:768px){.grid{grid-template-columns:1fr;padding:16px}header{padding:14px 16px}.tabs{padding:16px 16px 0}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">📰</div>
+    <div><h1>뉴스 대시보드</h1><span>경제 · 사회 · 정치 · IT · 세계</span></div>
+  </div>
+  <div class="updated">2026년 06월 04일 01:09 기준</div>
+</header>
+<div class="tabs"><button class="tab-btn active" onclick="showTab('경제', this)"><span class="dot" style="background:#0ea5e9"></span>경제</button><button class="tab-btn " onclick="showTab('사회', this)"><span class="dot" style="background:#a78bfa"></span>사회</button><button class="tab-btn " onclick="showTab('정치', this)"><span class="dot" style="background:#fb923c"></span>정치</button><button class="tab-btn " onclick="showTab('IT·기술', this)"><span class="dot" style="background:#34d399"></span>IT·기술</button><button class="tab-btn " onclick="showTab('세계', this)"><span class="dot" style="background:#f472b6"></span>세계</button></div>
+<div id="tab-경제" class="section-content active"><div class="grid"></div></div><div id="tab-사회" class="section-content "><div class="grid"></div></div><div id="tab-정치" class="section-content "><div class="grid"></div></div><div id="tab-IT·기술" class="section-content "><div class="grid"></div></div><div id="tab-세계" class="section-content "><div class="grid"></div></div>
+<script>
+function showTab(name, btn) {
+  document.querySelectorAll('.section-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
