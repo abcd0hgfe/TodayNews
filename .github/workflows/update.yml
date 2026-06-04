@@ -2,8 +2,8 @@ name: 뉴스 대시보드 자동 업데이트
 
 on:
   schedule:
-    - cron: '0 23 * * *'   # 한국시간 오전 8시
-    - cron: '0 8 * * *'    # 한국시간 오후 5시
+    - cron: '0 23 * * *'
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,6 +12,8 @@ permissions:
 jobs:
   update-news:
     runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   
 
     steps:
       - name: 코드 체크아웃
