@@ -1,21 +1,13 @@
 import feedparser
 import json
 import os
+import re
 from datetime import datetime
-from openai import OpenAI
+import google.generativeai as genai
 
-client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+model = genai.GenerativeModel("gemini-1.5-flash")
 
-# 네이버 뉴스 RSS 피드 (섹션별)
-RSS_FEEDS = {
-    "경제": "https://feeds.feedburner.com/navereconomy",
-    "사회": "https://feeds.feedburner.com/naversociety",
-    "정치": "https://feeds.feedburner.com/naverpolitics",
-    "IT·기술": "https://feeds.feedburner.com/naverit",
-    "세계": "https://feeds.feedburner.com/naverworld",
-}
-
-# 실제 네이버 RSS URL
 RSS_FEEDS = {
     "경제": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=101",
     "사회": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=102",
@@ -30,7 +22,7 @@ def analyze_article(title, description):
 제목: {title}
 내용: {description}
 
-아래 JSON 형식으로만 응답해:
+아래 JSON 형식으로만 응답해. 다른 말 하지 말고 JSON만:
 {{
   "summary": "기사 내용을 2~3문장으로 간략히 요약",
   "positive": "이 기사로 인한 긍정적 효과 1~2문장",
@@ -38,38 +30,33 @@ def analyze_article(title, description):
   "importance": "high 또는 mid (중요도 판단)"
 }}"""
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-    )
-    
-    import re
-    text = response.choices[0].message.content.strip()
-    # JSON 부분만 추출
-    match = re.search(r'\{.*\}', text, re.DOTALL)
-    if match:
-        return json.loads(match.group())
+    try:
+        response = model.generate_content(prompt)
+        text = response.text.strip()
+        match = re.search(r'\{.*\}', text, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+    except Exception as e:
+        print(f"  분석 오류: {e}")
     return None
 
 def fetch_and_analyze():
     all_news = {}
-    
+
     for section, url in RSS_FEEDS.items():
         print(f"[{section}] 뉴스 수집 중...")
         feed = feedparser.parse(url)
         articles = []
-        
-        # 각 섹션에서 상위 5개 기사만 분석
+
         for entry in feed.entries[:5]:
             title = entry.get("title", "")
             description = entry.get("summary", entry.get("description", ""))
             link = entry.get("link", "#")
             published = entry.get("published", "")
-            
+
             print(f"  분석 중: {title[:30]}...")
             analysis = analyze_article(title, description)
-            
+
             if analysis:
                 articles.append({
                     "title": title,
@@ -80,15 +67,14 @@ def fetch_and_analyze():
                     "negative": analysis.get("negative", ""),
                     "importance": analysis.get("importance", "mid"),
                 })
-        
+
         all_news[section] = articles
-    
+
     return all_news
 
 def generate_html(news_data):
     updated_time = datetime.now().strftime("%Y년 %m월 %d일 %H:%M 기준")
-    
-    # 섹션별 탭 색상
+
     section_colors = {
         "경제": "#0ea5e9",
         "사회": "#a78bfa",
@@ -96,56 +82,43 @@ def generate_html(news_data):
         "IT·기술": "#34d399",
         "세계": "#f472b6",
     }
-    
-    # 탭 버튼 생성
+
     tabs_html = ""
     for i, section in enumerate(news_data.keys()):
         color = section_colors.get(section, "#fff")
         active = "active" if i == 0 else ""
-        tabs_html += f'''
-        <button class="tab-btn {active}" onclick="showTab('{section}', this)">
-            <span class="dot" style="background:{color}"></span>{section}
-        </button>'''
-    
-    # 섹션별 카드 생성
+        tabs_html += f'<button class="tab-btn {active}" onclick="showTab(\'{section}\', this)"><span class="dot" style="background:{color}"></span>{section}</button>'
+
     sections_html = ""
     for i, (section, articles) in enumerate(news_data.items()):
         active = "active" if i == 0 else ""
         cards_html = ""
-        
+
         for article in articles:
             imp_class = "high" if article["importance"] == "high" else "mid"
             imp_label = "★ 주요" if article["importance"] == "high" else "▲ 관심"
-            
+            pub = article["published"][:16] if article["published"] else ""
+
             cards_html += f'''
             <div class="card">
-                <div class="card-header">
-                    <div class="card-title">{article["title"]}</div>
-                    <span class="importance {imp_class}">{imp_label}</span>
-                </div>
-                <div class="card-summary">{article["summary"]}</div>
-                <div class="effects">
-                    <div class="effect positive">
-                        <span class="effect-icon">✅</span>
-                        <span><span class="effect-label">긍정:</span>{article["positive"]}</span>
-                    </div>
-                    <div class="effect negative">
-                        <span class="effect-icon">⚠️</span>
-                        <span><span class="effect-label">부정:</span>{article["negative"]}</span>
-                    </div>
-                </div>
-                <div class="card-footer">
-                    <span class="card-time">{article["published"][:16] if article["published"] else ""}</span>
-                    <a class="card-link" href="{article["link"]}" target="_blank">기사 보기 →</a>
-                </div>
+              <div class="card-header">
+                <div class="card-title">{article["title"]}</div>
+                <span class="importance {imp_class}">{imp_label}</span>
+              </div>
+              <div class="card-summary">{article["summary"]}</div>
+              <div class="effects">
+                <div class="effect positive"><span class="effect-icon">✅</span><span><span class="effect-label">긍정:</span>{article["positive"]}</span></div>
+                <div class="effect negative"><span class="effect-icon">⚠️</span><span><span class="effect-label">부정:</span>{article["negative"]}</span></div>
+              </div>
+              <div class="card-footer">
+                <span class="card-time">{pub}</span>
+                <a class="card-link" href="{article["link"]}" target="_blank">기사 보기 →</a>
+              </div>
             </div>'''
-        
-        sections_html += f'''
-        <div id="tab-{section}" class="section-content {active}">
-            <div class="grid">{cards_html}</div>
-        </div>'''
-    
-    html = f'''<!DOCTYPE html>
+
+        sections_html += f'<div id="tab-{section}" class="section-content {active}"><div class="grid">{cards_html}</div></div>'
+
+    return f'''<!DOCTYPE html>
 <html lang="ko">
 <head>
   <meta charset="UTF-8"/>
@@ -153,12 +126,12 @@ def generate_html(news_data):
   <title>뉴스 대시보드</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:'Noto Sans KR','Apple SD Gothic Neo',sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh}}
-    header{{background:linear-gradient(135deg,#1a1d2e 0%,#16213e 100%);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}}
+    body{{font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh}}
+    header{{background:linear-gradient(135deg,#1a1d2e,#16213e);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}}
     .logo{{display:flex;align-items:center;gap:10px}}
     .logo-icon{{width:36px;height:36px;background:linear-gradient(135deg,#0ea5e9,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}}
     .logo h1{{font-size:1.3rem;font-weight:700;color:#fff}}
-    .logo span{{font-size:0.75rem;color:#8b949e;margin-top:2px;display:block}}
+    .logo span{{font-size:0.75rem;color:#8b949e;display:block;margin-top:2px}}
     .updated{{font-size:0.78rem;color:#8b949e;background:#21262d;padding:6px 14px;border-radius:20px;border:1px solid #30363d}}
     .tabs{{display:flex;gap:8px;padding:20px 32px 0;border-bottom:1px solid #21262d;overflow-x:auto}}
     .tab-btn{{padding:10px 20px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:0.9rem;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;white-space:nowrap}}
@@ -193,10 +166,7 @@ def generate_html(news_data):
 <header>
   <div class="logo">
     <div class="logo-icon">📰</div>
-    <div>
-      <h1>뉴스 대시보드</h1>
-      <span>경제 · 사회 · 정치 · IT · 세계</span>
-    </div>
+    <div><h1>뉴스 대시보드</h1><span>경제 · 사회 · 정치 · IT · 세계</span></div>
   </div>
   <div class="updated">{updated_time}</div>
 </header>
@@ -212,17 +182,12 @@ function showTab(name, btn) {{
 </script>
 </body>
 </html>'''
-    
-    return html
 
 if __name__ == "__main__":
     print("뉴스 수집 및 분석 시작...")
     news_data = fetch_and_analyze()
-    
     print("HTML 생성 중...")
     html_content = generate_html(news_data)
-    
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html_content)
-    
     print("완료! index.html 생성됨")
