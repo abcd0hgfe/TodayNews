@@ -53,11 +53,27 @@ def analyze_article(title, description):
             contents=prompt,
         )
         text = response.text.strip()
+        text = re.sub(r'```(?:json)?\s*', '', text).strip()
         match = re.search(r'\{.*\}', text, re.DOTALL)
         if match:
             return json.loads(match.group())
     except Exception as e:
         print(f"  분석 오류: {e}")
+        if "429" in str(e) or "quota" in str(e).lower():
+            print("  Rate limit 감지, 60초 대기 후 재시도...")
+            time.sleep(60)
+            try:
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash-lite",
+                    contents=prompt,
+                )
+                text = response.text.strip()
+                text = re.sub(r'```(?:json)?\s*', '', text).strip()
+                match = re.search(r'\{.*\}', text, re.DOTALL)
+                if match:
+                    return json.loads(match.group())
+            except Exception as e2:
+                print(f"  재시도 실패: {e2}")
 
     return None
 
