@@ -10,24 +10,24 @@ model = genai.GenerativeModel("gemini-1.5-flash")
 
 RSS_FEEDS = {
     "정치": [
-        "https://www.yna.co.kr/rss/politics.xml",       # 연합뉴스 정치
-        "https://www.yna.co.kr/rss/culture.xml",         # 연합뉴스 (뉴스1 대체)
+        "https://www.yna.co.kr/rss/politics.xml",           # 연합뉴스 정치 ✅
+        "https://www.yna.co.kr/rss/economy.xml",            # 연합뉴스 (보조)
     ],
     "경제": [
-        "https://www.hankyung.com/feed/economy",          # 한국경제 경제
-        "https://www.hankyung.com/feed/finance",          # 한국경제 금융
+        "https://www.hankyung.com/feed/economy",             # 한국경제 경제 ✅
+        "https://www.hankyung.com/feed/finance",             # 한국경제 금융 ✅
     ],
     "사회": [
-        "https://www.hani.co.kr/rss/society/",            # 한겨레 사회 (한국일보 RSS 불안정)
-        "https://www.khan.co.kr/rss/rssdata/kh_society.xml",  # 경향신문 사회
+        "https://www.yna.co.kr/rss/society.xml",             # 연합뉴스 사회 ✅
+        "https://www.yna.co.kr/rss/culture.xml",             # 연합뉴스 문화
     ],
     "IT·기술": [
-        "https://zdnet.co.kr/rss/feed.php",               # 지디넷코리아
-        "https://www.etnews.com/etnews/rss.xml",          # 전자신문
+        "https://feeds.feedburner.com/zdkorea",              # 지디넷코리아 ✅ (새 URL)
+        "https://www.etnews.com/etnews/rss.xml",             # 전자신문 ✅
     ],
     "세계": [
-        "https://www.yna.co.kr/rss/international.xml",    # 연합뉴스 국제
-        "https://www.ytn.co.kr/_ln/0101_rss.xml",         # YTN 국제
+        "https://www.yna.co.kr/rss/international.xml",       # 연합뉴스 국제 ✅
+        "https://www.yna.co.kr/rss/all.xml",                 # 연합뉴스 전체 (보조)
     ],
 }
 
@@ -55,45 +55,48 @@ def analyze_article(title, description):
         print(f"  분석 오류: {e}")
     return None
 
-def fetch_section(urls, max_articles=5):
+def fetch_section(section_name, urls, max_articles=5):
     articles_raw = []
     for url in urls:
         try:
             feed = feedparser.parse(url)
-            print(f"    RSS: {url} → {len(feed.entries)}개 항목")
-            for entry in feed.entries:
-                articles_raw.append(entry)
+            count = len(feed.entries)
+            print(f"    [{section_name}] {url} → {count}개 항목 수집")
+            articles_raw.extend(feed.entries)
         except Exception as e:
-            print(f"  RSS 오류 ({url}): {e}")
+            print(f"    [{section_name}] RSS 오류 ({url}): {e}")
+
     # 중복 제거 (제목 기준)
     seen = set()
     unique = []
     for entry in articles_raw:
-        title = entry.get("title", "")
+        title = entry.get("title", "").strip()
         if title and title not in seen:
             seen.add(title)
             unique.append(entry)
+
+    print(f"    [{section_name}] 중복 제거 후 {len(unique)}개 → 상위 {min(max_articles, len(unique))}개 분석")
     return unique[:max_articles]
 
 def fetch_and_analyze():
     all_news = {}
 
     for section, urls in RSS_FEEDS.items():
-        print(f"\n[{section}] 뉴스 수집 중...")
-        entries = fetch_section(urls)
+        print(f"\n========== [{section}] 시작 ==========")
+        entries = fetch_section(section, urls)
         articles = []
 
         for entry in entries:
             title = entry.get("title", "").strip()
             description = entry.get("summary", entry.get("description", "")).strip()
-            description = re.sub(r'<[^>]+>', '', description)  # HTML 태그 제거
+            description = re.sub(r'<[^>]+>', '', description)
             link = entry.get("link", "#")
             published = entry.get("published", "")
 
             if not title:
                 continue
 
-            print(f"  분석 중: {title[:35]}...")
+            print(f"  분석 중: {title[:40]}...")
             analysis = analyze_article(title, description)
 
             if analysis:
@@ -106,9 +109,11 @@ def fetch_and_analyze():
                     "negative": analysis.get("negative", ""),
                     "importance": analysis.get("importance", "mid"),
                 })
+            else:
+                print(f"  ⚠ 분석 실패: {title[:40]}")
 
         all_news[section] = articles
-        print(f"  → {len(articles)}개 기사 완료")
+        print(f"  ✅ [{section}] 최종 {len(articles)}개 기사 완료")
 
     return all_news
 
@@ -233,10 +238,10 @@ function showTab(name, btn) {{
 </html>'''
 
 if __name__ == "__main__":
-    print("뉴스 수집 및 분석 시작...")
+    print("===== 뉴스 수집 및 분석 시작 =====")
     news_data = fetch_and_analyze()
-    print("\nHTML 생성 중...")
+    print("\n===== HTML 생성 중 =====")
     html_content = generate_html(news_data)
     with open("index.html", "w", encoding="utf-8") as f:
         f.write(html_content)
-    print("완료! index.html 생성됨")
+    print("===== 완료! index.html 생성됨 =====")
