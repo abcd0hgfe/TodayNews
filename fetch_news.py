@@ -1,0 +1,228 @@
+import feedparser
+import json
+import os
+from datetime import datetime
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+
+# 네이버 뉴스 RSS 피드 (섹션별)
+RSS_FEEDS = {
+    "경제": "https://feeds.feedburner.com/navereconomy",
+    "사회": "https://feeds.feedburner.com/naversociety",
+    "정치": "https://feeds.feedburner.com/naverpolitics",
+    "IT·기술": "https://feeds.feedburner.com/naverit",
+    "세계": "https://feeds.feedburner.com/naverworld",
+}
+
+# 실제 네이버 RSS URL
+RSS_FEEDS = {
+    "경제": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=101",
+    "사회": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=102",
+    "정치": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=100",
+    "IT·기술": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=105",
+    "세계": "https://news.naver.com/main/rss/main.naver?mode=LSD&mid=sec&sid1=104",
+}
+
+def analyze_article(title, description):
+    prompt = f"""다음 뉴스 기사를 분석해줘.
+
+제목: {title}
+내용: {description}
+
+아래 JSON 형식으로만 응답해:
+{{
+  "summary": "기사 내용을 2~3문장으로 간략히 요약",
+  "positive": "이 기사로 인한 긍정적 효과 1~2문장",
+  "negative": "이 기사로 인한 부정적 효과 1~2문장",
+  "importance": "high 또는 mid (중요도 판단)"
+}}"""
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.3,
+    )
+    
+    import re
+    text = response.choices[0].message.content.strip()
+    # JSON 부분만 추출
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        return json.loads(match.group())
+    return None
+
+def fetch_and_analyze():
+    all_news = {}
+    
+    for section, url in RSS_FEEDS.items():
+        print(f"[{section}] 뉴스 수집 중...")
+        feed = feedparser.parse(url)
+        articles = []
+        
+        # 각 섹션에서 상위 5개 기사만 분석
+        for entry in feed.entries[:5]:
+            title = entry.get("title", "")
+            description = entry.get("summary", entry.get("description", ""))
+            link = entry.get("link", "#")
+            published = entry.get("published", "")
+            
+            print(f"  분석 중: {title[:30]}...")
+            analysis = analyze_article(title, description)
+            
+            if analysis:
+                articles.append({
+                    "title": title,
+                    "link": link,
+                    "published": published,
+                    "summary": analysis.get("summary", ""),
+                    "positive": analysis.get("positive", ""),
+                    "negative": analysis.get("negative", ""),
+                    "importance": analysis.get("importance", "mid"),
+                })
+        
+        all_news[section] = articles
+    
+    return all_news
+
+def generate_html(news_data):
+    updated_time = datetime.now().strftime("%Y년 %m월 %d일 %H:%M 기준")
+    
+    # 섹션별 탭 색상
+    section_colors = {
+        "경제": "#0ea5e9",
+        "사회": "#a78bfa",
+        "정치": "#fb923c",
+        "IT·기술": "#34d399",
+        "세계": "#f472b6",
+    }
+    
+    # 탭 버튼 생성
+    tabs_html = ""
+    for i, section in enumerate(news_data.keys()):
+        color = section_colors.get(section, "#fff")
+        active = "active" if i == 0 else ""
+        tabs_html += f'''
+        <button class="tab-btn {active}" onclick="showTab('{section}', this)">
+            <span class="dot" style="background:{color}"></span>{section}
+        </button>'''
+    
+    # 섹션별 카드 생성
+    sections_html = ""
+    for i, (section, articles) in enumerate(news_data.items()):
+        active = "active" if i == 0 else ""
+        cards_html = ""
+        
+        for article in articles:
+            imp_class = "high" if article["importance"] == "high" else "mid"
+            imp_label = "★ 주요" if article["importance"] == "high" else "▲ 관심"
+            
+            cards_html += f'''
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">{article["title"]}</div>
+                    <span class="importance {imp_class}">{imp_label}</span>
+                </div>
+                <div class="card-summary">{article["summary"]}</div>
+                <div class="effects">
+                    <div class="effect positive">
+                        <span class="effect-icon">✅</span>
+                        <span><span class="effect-label">긍정:</span>{article["positive"]}</span>
+                    </div>
+                    <div class="effect negative">
+                        <span class="effect-icon">⚠️</span>
+                        <span><span class="effect-label">부정:</span>{article["negative"]}</span>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <span class="card-time">{article["published"][:16] if article["published"] else ""}</span>
+                    <a class="card-link" href="{article["link"]}" target="_blank">기사 보기 →</a>
+                </div>
+            </div>'''
+        
+        sections_html += f'''
+        <div id="tab-{section}" class="section-content {active}">
+            <div class="grid">{cards_html}</div>
+        </div>'''
+    
+    html = f'''<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>뉴스 대시보드</title>
+  <style>
+    *{{box-sizing:border-box;margin:0;padding:0}}
+    body{{font-family:'Noto Sans KR','Apple SD Gothic Neo',sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh}}
+    header{{background:linear-gradient(135deg,#1a1d2e 0%,#16213e 100%);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}}
+    .logo{{display:flex;align-items:center;gap:10px}}
+    .logo-icon{{width:36px;height:36px;background:linear-gradient(135deg,#0ea5e9,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}}
+    .logo h1{{font-size:1.3rem;font-weight:700;color:#fff}}
+    .logo span{{font-size:0.75rem;color:#8b949e;margin-top:2px;display:block}}
+    .updated{{font-size:0.78rem;color:#8b949e;background:#21262d;padding:6px 14px;border-radius:20px;border:1px solid #30363d}}
+    .tabs{{display:flex;gap:8px;padding:20px 32px 0;border-bottom:1px solid #21262d;overflow-x:auto}}
+    .tab-btn{{padding:10px 20px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:0.9rem;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;white-space:nowrap}}
+    .tab-btn:hover{{color:#e1e4e8}}
+    .tab-btn.active{{color:#fff;border-bottom-color:#0ea5e9;font-weight:700}}
+    .dot{{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}}
+    .section-content{{display:none}}
+    .section-content.active{{display:block}}
+    .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:28px 32px;max-width:1400px;margin:0 auto}}
+    .card{{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px;transition:transform 0.2s,border-color 0.2s;display:flex;flex-direction:column;gap:14px}}
+    .card:hover{{transform:translateY(-3px);border-color:#58a6ff}}
+    .card-header{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}}
+    .importance{{font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}}
+    .importance.high{{background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3)}}
+    .importance.mid{{background:rgba(234,179,8,0.15);color:#fbbf24;border:1px solid rgba(234,179,8,0.3)}}
+    .card-title{{font-size:1rem;font-weight:700;line-height:1.5;color:#e6edf3}}
+    .card-summary{{font-size:0.875rem;line-height:1.7;color:#c9d1d9;border-left:3px solid #30363d;padding-left:12px}}
+    .effects{{display:flex;flex-direction:column;gap:8px}}
+    .effect{{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:8px;font-size:0.82rem;line-height:1.6}}
+    .effect.positive{{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#86efac}}
+    .effect.negative{{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#fca5a5}}
+    .effect-icon{{font-size:1rem;flex-shrink:0;margin-top:1px}}
+    .effect-label{{font-weight:700;margin-right:4px}}
+    .card-footer{{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #21262d}}
+    .card-time{{font-size:0.75rem;color:#8b949e}}
+    .card-link{{font-size:0.78rem;color:#58a6ff;text-decoration:none;font-weight:500}}
+    .card-link:hover{{text-decoration:underline}}
+    @media(max-width:768px){{.grid{{grid-template-columns:1fr;padding:16px}}header{{padding:14px 16px}}.tabs{{padding:16px 16px 0}}}}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="logo-icon">📰</div>
+    <div>
+      <h1>뉴스 대시보드</h1>
+      <span>경제 · 사회 · 정치 · IT · 세계</span>
+    </div>
+  </div>
+  <div class="updated">{updated_time}</div>
+</header>
+<div class="tabs">{tabs_html}</div>
+{sections_html}
+<script>
+function showTab(name, btn) {{
+  document.querySelectorAll('.section-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+  btn.classList.add('active');
+}}
+</script>
+</body>
+</html>'''
+    
+    return html
+
+if __name__ == "__main__":
+    print("뉴스 수집 및 분석 시작...")
+    news_data = fetch_and_analyze()
+    
+    print("HTML 생성 중...")
+    html_content = generate_html(news_data)
+    
+    with open("index.html", "w", encoding="utf-8") as f:
+        f.write(html_content)
+    
+    print("완료! index.html 생성됨")
