@@ -2,6 +2,7 @@ import feedparser
 import json
 import os
 import re
+import time
 from datetime import datetime
 import google.generativeai as genai
 
@@ -97,7 +98,8 @@ def fetch_and_analyze():
                 continue
 
             print(f"  분석 중: {title[:40]}...")
-            analysis = analyze_article(title, description)
+              analysis = analyze_article(title, description)
+             time.sleep(7)  # 분당 10개 제한 대응
 
             if analysis:
                 articles.append({
