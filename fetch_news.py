@@ -103,7 +103,7 @@ def fetch_and_analyze():
     all_news = {}
     for section, urls in RSS_FEEDS.items():
         print(f"\n========== [{section}] 시작 ==========")
-        entries = fetch_section(section, urls)
+        entries = fetch_section(section, urls, max_articles=3)
         articles = []
         for entry in entries:
             title = entry.get("title", "").strip()
@@ -141,38 +141,39 @@ def generate_html(news_data):
     updated_time = datetime.now().strftime("%Y년 %m월 %d일 %H:%M 기준")
 
     section_colors = {
-        "정치": "#fb923c",
-        "경제": "#0ea5e9",
-        "사회": "#a78bfa",
-        "IT·기술": "#34d399",
-        "세계": "#f472b6",
+        "정치": {"main": "#f97316", "bg": "#fff7ed", "border": "#fed7aa", "tab_bg": "#fff7ed"},
+        "경제": {"main": "#0ea5e9", "bg": "#f0f9ff", "border": "#bae6fd", "tab_bg": "#f0f9ff"},
+        "사회": {"main": "#8b5cf6", "bg": "#f5f3ff", "border": "#ddd6fe", "tab_bg": "#f5f3ff"},
+        "IT·기술": {"main": "#10b981", "bg": "#ecfdf5", "border": "#a7f3d0", "tab_bg": "#ecfdf5"},
+        "세계": {"main": "#ec4899", "bg": "#fdf2f8", "border": "#fbcfe8", "tab_bg": "#fdf2f8"},
     }
 
     tabs_html = ""
     for i, section in enumerate(news_data.keys()):
-        color = section_colors.get(section, "#fff")
+        color = section_colors.get(section, {}).get("main", "#333")
         active = "active" if i == 0 else ""
-        tabs_html += f'<button class="tab-btn {active}" onclick="showTab(\'{section}\', this)"><span class="dot" style="background:{color}"></span>{section}</button>'
+        tabs_html += f'<button class="tab-btn {active}" style="--tab-color:{color}" onclick="showTab(\'{section}\', this)"><span class="dot" style="background:{color}"></span>{section}</button>'
 
     sections_html = ""
     for i, (section, articles) in enumerate(news_data.items()):
         active = "active" if i == 0 else ""
+        colors = section_colors.get(section, {"main": "#333", "bg": "#f9f9f9", "border": "#eee"})
         cards_html = ""
 
         if not articles:
-            cards_html = '<div style="padding:60px;text-align:center;color:#8b949e;font-size:0.95rem;">수집된 기사가 없습니다.</div>'
+            cards_html = '<div style="padding:60px;text-align:center;color:#9ca3af;font-size:0.95rem;">수집된 기사가 없습니다.</div>'
         else:
             for article in articles:
                 imp_class = "high" if article["importance"] == "high" else "mid"
                 imp_label = "★ 주요" if article["importance"] == "high" else "▲ 관심"
                 pub = article["published"][:16] if article["published"] else ""
                 cards_html += f'''
-                <div class="card">
+                <div class="card" style="border-top:4px solid {colors["main"]}">
                   <div class="card-header">
                     <div class="card-title">{article["title"]}</div>
                     <span class="importance {imp_class}">{imp_label}</span>
                   </div>
-                  <div class="card-summary">{article["summary"]}</div>
+                  <div class="card-summary" style="border-left-color:{colors["main"]}">{article["summary"]}</div>
                   <div class="effects">
                     <div class="effect positive">
                       <span class="effect-icon">✅</span>
@@ -185,11 +186,11 @@ def generate_html(news_data):
                   </div>
                   <div class="card-footer">
                     <span class="card-time">{pub}</span>
-                    <a class="card-link" href="{article["link"]}" target="_blank">기사 보기 →</a>
+                    <a class="card-link" href="{article["link"]}" target="_blank" style="color:{colors["main"]}">기사 보기 →</a>
                   </div>
                 </div>'''
 
-        sections_html += f'<div id="tab-{section}" class="section-content {active}"><div class="grid">{cards_html}</div></div>'
+        sections_html += f'<div id="tab-{section}" class="section-content {active}" style="background:{colors["bg"]}""><div class="grid">{cards_html}</div></div>'
 
     return f'''<!DOCTYPE html>
 <html lang="ko">
@@ -199,40 +200,40 @@ def generate_html(news_data):
   <title>뉴스 대시보드</title>
   <style>
     *{{box-sizing:border-box;margin:0;padding:0}}
-    body{{font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;background:#0f1117;color:#e1e4e8;min-height:100vh}}
-    header{{background:linear-gradient(135deg,#1a1d2e,#16213e);border-bottom:1px solid #30363d;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}}
+    body{{font-family:"Noto Sans KR","Apple SD Gothic Neo",sans-serif;background:#f3f4f6;color:#111827;min-height:100vh}}
+    header{{background:#ffffff;border-bottom:1px solid #e5e7eb;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.06)}}
     .logo{{display:flex;align-items:center;gap:10px}}
     .logo-icon{{width:36px;height:36px;background:linear-gradient(135deg,#0ea5e9,#6366f1);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px}}
-    .logo h1{{font-size:1.3rem;font-weight:700;color:#fff}}
-    .logo span{{font-size:0.75rem;color:#8b949e;display:block;margin-top:2px}}
-    .updated{{font-size:0.78rem;color:#8b949e;background:#21262d;padding:6px 14px;border-radius:20px;border:1px solid #30363d}}
-    .tabs{{display:flex;gap:8px;padding:20px 32px 0;border-bottom:1px solid #21262d;overflow-x:auto}}
-    .tab-btn{{padding:10px 20px;border:none;background:transparent;color:#8b949e;cursor:pointer;font-size:0.9rem;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;white-space:nowrap}}
-    .tab-btn:hover{{color:#e1e4e8}}
-    .tab-btn.active{{color:#fff;border-bottom-color:#0ea5e9;font-weight:700}}
+    .logo h1{{font-size:1.3rem;font-weight:700;color:#111827}}
+    .logo span{{font-size:0.75rem;color:#6b7280;display:block;margin-top:2px}}
+    .updated{{font-size:0.78rem;color:#6b7280;background:#f9fafb;padding:6px 14px;border-radius:20px;border:1px solid #e5e7eb}}
+    .tabs{{display:flex;gap:4px;padding:0 32px;background:#ffffff;border-bottom:1px solid #e5e7eb;overflow-x:auto}}
+    .tab-btn{{padding:14px 22px;border:none;background:transparent;color:#6b7280;cursor:pointer;font-size:0.9rem;font-weight:500;border-bottom:3px solid transparent;transition:all 0.2s;white-space:nowrap}}
+    .tab-btn:hover{{color:#111827;background:#f9fafb}}
+    .tab-btn.active{{color:var(--tab-color);border-bottom-color:var(--tab-color);font-weight:700}}
     .dot{{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}}
-    .section-content{{display:none}}
+    .section-content{{display:none;min-height:calc(100vh - 120px)}}
     .section-content.active{{display:block}}
     .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;padding:28px 32px;max-width:1400px;margin:0 auto}}
-    .card{{background:#161b22;border:1px solid #30363d;border-radius:14px;padding:22px;transition:transform 0.2s,border-color 0.2s;display:flex;flex-direction:column;gap:14px}}
-    .card:hover{{transform:translateY(-3px);border-color:#58a6ff}}
+    .card{{background:#ffffff;border:1px solid #e5e7eb;border-radius:14px;padding:22px;transition:transform 0.2s,box-shadow 0.2s;display:flex;flex-direction:column;gap:14px;box-shadow:0 1px 3px rgba(0,0,0,0.05)}}
+    .card:hover{{transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,0.10)}}
     .card-header{{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}}
     .importance{{font-size:0.7rem;font-weight:700;padding:3px 10px;border-radius:20px;white-space:nowrap;flex-shrink:0}}
-    .importance.high{{background:rgba(239,68,68,0.15);color:#f87171;border:1px solid rgba(239,68,68,0.3)}}
-    .importance.mid{{background:rgba(234,179,8,0.15);color:#fbbf24;border:1px solid rgba(234,179,8,0.3)}}
-    .card-title{{font-size:1rem;font-weight:700;line-height:1.5;color:#e6edf3}}
-    .card-summary{{font-size:0.875rem;line-height:1.7;color:#c9d1d9;border-left:3px solid #30363d;padding-left:12px}}
+    .importance.high{{background:#fef2f2;color:#ef4444;border:1px solid #fecaca}}
+    .importance.mid{{background:#fffbeb;color:#f59e0b;border:1px solid #fde68a}}
+    .card-title{{font-size:1rem;font-weight:700;line-height:1.5;color:#111827}}
+    .card-summary{{font-size:0.875rem;line-height:1.7;color:#4b5563;border-left:3px solid #e5e7eb;padding-left:12px}}
     .effects{{display:flex;flex-direction:column;gap:8px}}
     .effect{{display:flex;align-items:flex-start;gap:10px;padding:10px 14px;border-radius:8px;font-size:0.82rem;line-height:1.6}}
-    .effect.positive{{background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);color:#86efac}}
-    .effect.negative{{background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.2);color:#fca5a5}}
+    .effect.positive{{background:#f0fdf4;border:1px solid #bbf7d0;color:#166534}}
+    .effect.negative{{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}}
     .effect-icon{{font-size:1rem;flex-shrink:0;margin-top:1px}}
     .effect-label{{font-weight:700;margin-right:4px}}
-    .card-footer{{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #21262d}}
-    .card-time{{font-size:0.75rem;color:#8b949e}}
-    .card-link{{font-size:0.78rem;color:#58a6ff;text-decoration:none;font-weight:500}}
+    .card-footer{{display:flex;justify-content:space-between;align-items:center;padding-top:4px;border-top:1px solid #f3f4f6}}
+    .card-time{{font-size:0.75rem;color:#9ca3af}}
+    .card-link{{font-size:0.78rem;text-decoration:none;font-weight:600}}
     .card-link:hover{{text-decoration:underline}}
-    @media(max-width:768px){{.grid{{grid-template-columns:1fr;padding:16px}}header{{padding:14px 16px}}.tabs{{padding:16px 16px 0}}}}
+    @media(max-width:768px){{.grid{{grid-template-columns:1fr;padding:16px}}header{{padding:14px 16px}}.tabs{{padding:0 8px}}}}
   </style>
 </head>
 <body>
